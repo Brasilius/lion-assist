@@ -93,7 +93,7 @@ pub fn classify(subject: &str, body: &str, newsletter: bool) -> (Tier, String) {
         "no higher-priority rule matched; review if needed".into(),
     )
 }
-fn text_parts(
+pub(crate) fn text_parts(
     mail: &mailparse::ParsedMail<'_>,
     out: &mut String,
     remaining: &mut usize,

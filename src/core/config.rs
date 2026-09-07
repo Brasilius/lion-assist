@@ -8,6 +8,8 @@ use std::{
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Config {
+    #[serde(default)]
+    pub agent: crate::agent::config::AgentConfig,
     pub data_dir: PathBuf,
     pub limits: Limits,
     pub models: Models,
@@ -48,7 +50,7 @@ pub enum Provider {
     Gemini,
     ChatCompletions,
 }
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Voice {
     pub enabled: bool,
@@ -71,6 +73,12 @@ impl Config {
         Ok(config)
     }
     pub fn validate(&self) -> Result<()> {
+        self.agent.validate()?;
+        ensure!(
+            !self.agent.voice.continuous
+                || (self.voice.enabled && !self.voice.listen_command.is_empty()),
+            "continuous voice requires voice.enabled and a listen_command"
+        );
         ensure!(
             self.limits.disk_bytes > 0 && self.limits.disk_bytes <= 50_000_000_000,
             "disk_bytes must be within 1..=50,000,000,000 (decimal GB)"

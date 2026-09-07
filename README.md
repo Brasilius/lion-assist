@@ -1,6 +1,28 @@
 # Lion Assist
 
-A Rust CLI personal assistant with serial task execution, local email tiers, bounded research downloads, model routing, and optional speech. This is an initial implementation: no account credentials or microphone tools are bundled, and no live mailbox changes are made.
+Lion Assist is intended to be a persistent, voice-enabled personal agent living on your PC. Rust workflows handle retrieval, execution, state and verification so inexpensive models can complete complex tasks. Stronger models supply judgment where the task needs it: organizing email, resolving ambiguity and reviewing consequential actions.
+
+The intended experience is an assistant that discovers aerospace articles and papers, organizes your inbox, and answers appropriate Discord questions while you are away, explicitly identifying itself as your AI assistant. It tells you what it did through speech and accepts spoken requests through the same workflow system.
+
+**Implemented:** a resident Unix agent with durable jobs, 15-minute rundowns, faster connector polling, daily model budgets, strong-model email review, reversible Maildir moves, research selection, disclosed Discord bot replies, and continuous voice-adapter dispatch. Account credentials, a synchronized mailbox, and speech executables/models must be configured locally. External actions are disabled in the shipped configuration.
+
+Start with [the operating guide](docs/running-the-agent.md). [The architecture](docs/agent-architecture.md) explains the workflow design and remaining extensions.
+
+```bash
+cargo build --release --locked
+./target/release/lion-assist doctor
+./target/release/lion-assist daemon
+# In another terminal:
+./target/release/lion-assist agent status
+./target/release/lion-assist agent "I'm away"
+./target/release/lion-assist agent "research electric propulsion"
+./target/release/lion-assist agent pause
+./target/release/lion-assist agent stop
+```
+
+The daemon uses the settings under `[agent]` in `config/system.toml`. With no sources or accounts configured it runs idle. Set research queries/feeds, a Maildir, Discord bot settings, and voice adapters to enable those workflows. `daemon --once` performs a bounded batch and exits. `agent` controls the running process without competing for its storage lock.
+
+The commands below are the original one-shot diagnostic interface. Their simpler behavior (such as keyword-only `email` classification) is separate from the resident workflows.
 
 ## Run locally
 
@@ -21,7 +43,7 @@ Settings are in `config/system.toml`; override with `--config /path/to/system.to
 The maximum setting is **50,000,000,000 bytes (50 decimal GB)**. The default managed-data budget is 49 GB, leaving 1 GB reserved for the installation and overhead. Increase that reservation for voice models or a larger installation. Data writes:
 
 - Count all existing files, directory allocations, and interrupted `.part` files under `data_dir`, using the larger of file length and allocated blocks on Unix.
-- Reserve conservatively before creating a temporary file, then sync and rename it. Objects are immutable and deduplicated; a full store rejects new objects and never evicts critical records.
+- Reserve conservatively before creating a temporary file, then sync and rename it. Content objects are immutable and deduplicated; the resident checkpoint is atomically replaced with room reserved for both copies. A full store rejects writes and never evicts critical records.
 - Reject path traversal, symlinks and special files; use a process lock to serialize writers.
 - Keep compression buffers in bounded memory instead of writing an uncompressed disk copy. HTTP responses, MIME inputs, decompression, prompts and model outputs have separate size limits.
 
@@ -49,7 +71,7 @@ Use a locally synchronized Maildir with `new/` and/or `cur/`. A retained directo
 
 Higher-priority rules always win. Rules inspect decoded subject and text MIME parts; attachments are skipped. The stored JSON includes the sender, subject, tier and reason, so classifications can be reviewed with `list` and `show`. These are keyword heuristics, not a guarantee that every critical email is recognized; sender addresses are not authenticated. Edit the phrase lists in `src/tasks/email/mod.rs` to tailor them.
 
-The app stores local tier records and leaves originals in place. Gmail/Outlook OAuth, IMAP synchronization and server-side label/folder updates remain to be implemented once a mailbox provider and desired behavior are selected. Email contents are not sent to a model by this organizer. With voice enabled, newly persisted messages trigger a tier-only announcement; subjects, bodies and authentication codes are not spoken. An announcement failure is reported and is not retried after persistence, avoiding duplicate announcements.
+The app stores local tier records and leaves originals in place. Gmail/Outlook OAuth, IMAP synchronization and server-side label/folder updates remain to be implemented once a mailbox provider and desired behavior are selected. Email contents are not sent to a model by the one-shot `email`/`watch-email` commands. The resident agent sends bounded email evidence to its configured model providers and can apply reversible local Maildir moves; see the operating guide. With voice enabled, newly persisted messages trigger a tier-only announcement; subjects, bodies and authentication codes are not spoken. An announcement failure is reported and is not retried after persistence, avoiding duplicate announcements.
 
 ## Aerospace research
 
@@ -80,9 +102,9 @@ Simple requests and summaries use the cheap tier; long requests and reasoning ke
 
 `provider = "gemini"` uses the native generateContent protocol. `provider = "chat_completions"` supports compatible services with `base_url` ending at their API root (e.g. `/v1`), a model name and an environment-variable name for the key. That adapter sends `max_tokens`; choose a service/model supporting that parameter. Localhost HTTP is allowed for local servers; remote endpoints require HTTPS. Provider keys are loaded only when used, and request URLs/bodies/keys are not logged.
 
-Every attempt consumes the per-process call budget, including failures. Prompt/output limits are enforced; no automatic paid retries or fallback occur. This bounds requests, not dollars: configure billing caps at the provider for a monetary guarantee. Model conversations are stateless and answers are not persisted automatically. Text passed to `ask`, `summarize`, `discord` or `listen` goes to the configured model provider. External text is marked as untrusted and models have no action tools.
+For one-shot commands, every attempt consumes the per-process call budget, including failures. Prompt/output limits are enforced; no automatic paid retries or fallback occur. This bounds requests, not dollars: configure billing caps at the provider for a monetary guarantee. One-shot model conversations are stateless and answers are not persisted automatically. The daemon instead persists jobs, explanations, outcomes and daily budget reservations. Text passed to `ask`, `summarize`, `discord` or `listen` goes to the configured model provider. External text is marked as untrusted and models have no action tools.
 
-Discord uses `DISCORD_BOT_TOKEN` and fetches the latest 100 messages from the specified channel, in chronological order for summarization. The bot needs access to the channel, Read Message History and [Message Content intent where required](https://docs.discord.com/developers/resources/message). This is an on-demand summary of message text, not a complete channel archive; attachments, voice channels and live Gateway events are not handled. The app sends no Discord messages.
+Discord uses `DISCORD_BOT_TOKEN` and fetches the latest 100 messages from the specified channel, in chronological order for summarization. The bot needs access to the channel, Read Message History and [Message Content intent where required](https://docs.discord.com/developers/resources/message). This is an on-demand summary of message text, not a complete channel archive; attachments, voice channels and live Gateway events are not handled. This one-shot command sends no Discord messages. The resident agent can send disclosed replies when its channel configuration, `allow_send`, and away mode permit it.
 
 ## Voice
 
@@ -95,7 +117,7 @@ cargo run --locked -- listen
 
 For a richer JARVIS-style sound, configure your chosen licensed TTS adapter in `speak_command`. It must read UTF-8 text from stdin, play audio synchronously and exit. The repo does not bundle a character voice or cloned voice model.
 
-`listen_command` must be a trusted executable/argument array that records one utterance, transcribes it and prints only the UTF-8 transcript to stdout. Configure an installed speech recognizer wrapper here before using `listen`; no recognizer or microphone driver is bundled. Listening is on demand. Its transcript is answered using model routing and spoken back; spoken text cannot execute shell commands or modify files. Always-on wake words and spoken feature dispatch are future work.
+`listen_command` must be a trusted executable/argument array that records one utterance, transcribes it and prints only the UTF-8 transcript to stdout. Configure an installed speech recognizer wrapper here before using `listen`; no recognizer or microphone driver is bundled. The one-shot `listen` command answers its transcript using model routing. The resident daemon can continuously invoke a recognizer and dispatch spoken controls and research requests through typed workflows. Its wake phrase is checked after transcription; it is not a dedicated acoustic wake-word detector. The bundled Linux adapter and setup instructions are in the operating guide. Spoken text never becomes a shell command.
 
 Commands are launched without a shell. Input/output sizes and wall time are bounded, and on Unix the adapter process group is killed on completion or timeout. Adapters must not detach from their group or daemonize. Speech text is limited to 4000 bytes; transcripts to 16 KiB. Keep all adapter models, caches and scratch files inside the OS storage boundary; application storage accounting cannot police external executables.
 
@@ -107,4 +129,4 @@ cargo test --locked
 cargo clippy --locked --all-targets -- -D warnings
 ```
 
-Tests cover quota rejection, restart accounting, competing locks, orphaned writes, symlink/traversal rejection, input/decompression limits, MIME email tier precedence, deduplication, both research parsers, model routing, a localhost mock provider, event-loop recovery and voice subprocess timeout. Tests use no real accounts or paid APIs. The localhost mock requires permission to bind a local socket in restricted sandboxes.
+Tests also exercise resident restart recovery, model-reviewed email moves and undo, invalid evidence rejection, Discord disclosure and uncertain-delivery recovery, cursor backpressure, quiet hours, daily budgets, and daemon controls. Existing tests cover quota rejection, restart accounting, competing locks, orphaned writes, symlink/traversal rejection, input/decompression limits, MIME email tier precedence, deduplication, both research parsers, model routing, a localhost mock provider, event-loop recovery and voice subprocess timeout. Tests use no real accounts or paid APIs. The localhost mock requires permission to bind a local socket in restricted sandboxes.

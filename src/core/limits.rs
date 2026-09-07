@@ -146,6 +146,51 @@ impl Store {
         result?;
         Ok(true)
     }
+    /// Atomic mutable checkpoints. Reserve for both the old and new copy.
+    pub fn replace(&mut self, name: &str, bytes: &[u8]) -> Result<()> {
+        let path = self.path(name)?;
+        if path.try_exists()? {
+            ensure!(
+                fs::symlink_metadata(&path)?.file_type().is_file(),
+                "checkpoint must be a regular file"
+            );
+        }
+        let additional = (bytes.len() as u64).div_ceil(4096) * 4096 + 8192;
+        ensure!(
+            self.used()?
+                .checked_add(additional)
+                .is_some_and(|n| n <= self.budget),
+            "storage quota exhausted; checkpoint was not written"
+        );
+        // A unique staging name permits recovery after an interrupted checkpoint.
+        // Orphans remain accounted for, just as with immutable objects.
+        let stamp = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)?
+            .as_nanos();
+        let temporary = self
+            .root
+            .join(format!(".{name}-{}-{stamp}.part", std::process::id()));
+        let mut options = OpenOptions::new();
+        options.write(true).create_new(true);
+        #[cfg(unix)]
+        options.mode(0o600);
+        let mut file = options.open(&temporary)?;
+        let result = (|| -> Result<()> {
+            file.write_all(bytes)?;
+            file.sync_all()?;
+            ensure!(
+                self.used()? <= self.budget,
+                "physical allocation exceeded application budget"
+            );
+            fs::rename(&temporary, path)?;
+            File::open(&self.root)?.sync_all()?;
+            Ok(())
+        })();
+        if result.is_err() {
+            let _ = fs::remove_file(temporary);
+        }
+        result
+    }
     pub fn list(&self, prefix: &str, max: usize) -> Result<Vec<String>> {
         let mut names = Vec::new();
         for entry in fs::read_dir(&self.root)? {

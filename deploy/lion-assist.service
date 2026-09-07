@@ -1,0 +1,23 @@
+[Unit]
+Description=Lion persistent voice assistant
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+# Adjust these two paths if your checkout lives elsewhere.
+WorkingDirectory=%h/projects/lion-assist
+ExecStart=%h/projects/lion-assist/target/release/lion-assist --config %h/projects/lion-assist/config/system.toml daemon
+EnvironmentFile=-%h/.config/lion-assist/environment
+Restart=on-failure
+RestartSec=15
+TimeoutStopSec=360
+UMask=0077
+NoNewPrivileges=true
+LimitCORE=0
+# Keep output in the bounded application state instead of an unbounded journal.
+StandardOutput=null
+StandardError=journal
+
+[Install]
+WantedBy=default.target

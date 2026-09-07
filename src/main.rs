@@ -19,6 +19,19 @@ struct Cli {
 }
 #[derive(Subcommand)]
 enum Action {
+    /// Check local setup without contacting providers or revealing credentials.
+    Doctor,
+    /// Run the persistent voice agent with scheduled workflows and durable state.
+    Daemon {
+        /// Perform a bounded batch, print status, and exit.
+        #[arg(long)]
+        once: bool,
+    },
+    /// Send a JSON control command or a natural-language voice-style request.
+    Agent {
+        /// Examples: status, pause, "research ion propulsion", or '{"command":"away","enabled":true}'.
+        text: String,
+    },
     /// Show disk usage and enforcement boundary.
     Status,
     /// Process one JSON event per line until EOF or quit.
@@ -72,8 +85,24 @@ fn print(value: &serde_json::Value) -> Result<()> {
 }
 fn main() -> Result<()> {
     let cli = Cli::parse();
-    let mut app = Controller::new(Config::load(&cli.config)?)?;
+    let config = Config::load(&cli.config)?;
+    match cli.command {
+        Action::Doctor => return print(&lion_assist::agent::daemon::doctor(&config)),
+        Action::Daemon { once } => return lion_assist::agent::daemon::run(config, once),
+        Action::Agent { text } => {
+            let command = if text.trim_start().starts_with('{') {
+                serde_json::from_str(&text)?
+            } else {
+                lion_assist::agent::runtime::voice_command(&text, "")
+                    .ok_or_else(|| anyhow::anyhow!("unsupported control request"))?
+            };
+            return print(&lion_assist::agent::daemon::send(&config, command)?);
+        }
+        _ => {}
+    }
+    let mut app = Controller::new(config)?;
     let task = match cli.command {
+        Action::Doctor | Action::Daemon { .. } | Action::Agent { .. } => unreachable!(),
         Action::Status => Task::Status,
         Action::Ask { text, complex } => Task::Ask { text, complex },
         Action::Email { path } => Task::Email { path },

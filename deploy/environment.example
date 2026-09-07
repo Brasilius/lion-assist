@@ -1,0 +1,8 @@
+# Copy to ~/.config/lion-assist/environment with mode 0600; fill in your own values.
+GEMINI_API_KEY=replace-me
+DISCORD_BOT_TOKEN=replace-me
+# Needed only for the bundled Linux/whisper.cpp microphone adapter.
+LION_WHISPER_MODEL=/absolute/path/inside/storage-boundary/ggml-base.en.bin
+LION_VOICE_TMP=/absolute/path/inside/storage-boundary/voice-scratch
+# Optional; defaults to the system default ALSA microphone.
+LION_MIC_DEVICE=default

@@ -41,3 +41,47 @@ max_results = 10
 interval_secs = 3
 # Optional bounded arXiv PDF archival. Crossref remains metadata-only.
 download_pdfs = false
+
+# Resident agent. External connectors are enabled by filling in these settings.
+[agent]
+rundown_secs = 900
+poll_secs = 30
+research_secs = 21600
+max_jobs = 200
+max_attempts = 3
+daily_model_calls = 100
+# Conservative input-byte + output-token reservations, reset at UTC midnight.
+daily_token_budget = 1000000
+reserved_email_calls = 10
+max_calls_per_job = 4
+interests = "Aerospace engineering, spacecraft, aerodynamics and electric propulsion"
+# Example: ["electric propulsion", "spacecraft thermal control"]
+research_queries = []
+# RSS/Atom URLs or individual HTML article URLs. No arbitrary recursive crawling.
+feeds = []
+# Default: /tmp/lion-assist-control-<uid>. Must be private and outside data_dir.
+
+[agent.email]
+# maildir = "/absolute/path/to/synchronized/Maildir"
+apply_moves = false
+# Strong-model review of every decision; false still escalates important/ambiguous mail.
+review_all = true
+policy = "Keep financial, legal and security messages critical. Mark deadlines and personal requests important. Group aerospace newsletters as news. Preserve every message; never delete email."
+
+[agent.discord]
+enabled = false
+allow_send = false
+away = false
+channels = []
+bot_id = ""
+owner_name = "Leo"
+reply_policy = "Answer factual questions addressed to the bot. Do not make commitments or disclose private information."
+api_base = "https://discord.com/api/v10"
+token_env = "DISCORD_BOT_TOKEN"
+
+[agent.voice]
+continuous = false
+wake_phrase = "Lion"
+# Optional quiet hours in UTC. Critical-email announcements bypass quiet hours.
+# quiet_start_utc = 5
+# quiet_end_utc = 14
