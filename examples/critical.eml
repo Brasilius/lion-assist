@@ -1,0 +1,7 @@
+From: statements@example.test
+To: owner@example.test
+Subject: Your bank statement is ready
+MIME-Version: 1.0
+Content-Type: text/plain; charset=utf-8
+
+Your monthly financial statement is available. Keep it with your tax documents.

@@ -1,1 +1,43 @@
-#Voice model path and dbus endpoints
+# Paths are relative to the working directory. Use an absolute path for a service.
+data_dir = "data"
+
+[limits]
+# Decimal GB. Cannot exceed 50 GB. See README for the required OS quota boundary.
+disk_bytes = 50000000000
+# Leave 1 GB for software, voice assets and overhead; increase for large voice models.
+reserve_bytes = 1000000000
+max_input_bytes = 8388608
+max_response_bytes = 8388608
+max_prompt_bytes = 48000
+max_output_tokens = 2048
+max_model_calls_per_run = 100
+request_timeout_secs = 30
+poll_secs = 15
+max_emails_per_tick = 50
+
+[models.cheap]
+provider = "gemini"
+model = "gemini-3-flash-preview"
+base_url = "https://generativelanguage.googleapis.com/v1beta"
+api_key_env = "GEMINI_API_KEY"
+
+[models.advanced]
+provider = "gemini"
+model = "gemini-3.1-pro-preview"
+base_url = "https://generativelanguage.googleapis.com/v1beta"
+api_key_env = "GEMINI_API_KEY"
+
+[voice]
+enabled = false
+# British synthetic voice; replace with a licensed voice adapter for richer speech.
+# Reads text on stdin, plays audio itself, returns only after playback completes.
+speak_command = ["espeak-ng", "-v", "en-gb", "-s", "165", "--stdin"]
+# A trusted speech-to-text executable that records once and prints a UTF-8 transcript.
+listen_command = []
+timeout_secs = 30
+
+[research]
+max_results = 10
+interval_secs = 3
+# Optional bounded arXiv PDF archival. Crossref remains metadata-only.
+download_pdfs = false

@@ -1,3 +1,2 @@
-# Limits.toml
-#
-# This file will be used to store hard limits, such as disk size, memory and scrape pacing for im gathering data for aerospace research.
+# Limits live in [limits] in system.toml so there is a single validated source.
+# This legacy scaffold file is not loaded.
